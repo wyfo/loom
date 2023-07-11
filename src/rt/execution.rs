@@ -258,6 +258,10 @@ impl Execution {
     pub(crate) fn check_for_leaks(&self) {
         self.objects.check_for_leaks();
     }
+
+    pub(crate) fn id(&self) -> usize {
+        self.id.0
+    }
 }
 
 impl fmt::Debug for Execution {

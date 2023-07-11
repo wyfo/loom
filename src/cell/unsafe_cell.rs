@@ -1,4 +1,8 @@
 use crate::rt;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+static CELLS: Mutex<Option<HashMap<(usize, usize), rt::Cell>>> = Mutex::new(None);
 
 /// A checked version of `std::cell::UnsafeCell`.
 ///
@@ -6,11 +10,8 @@ use crate::rt;
 /// `with` and `with_mut`. Both functions take a closure in order to track the
 /// start and end of the access to the underlying cell.
 #[derive(Debug)]
-pub struct UnsafeCell<T: ?Sized> {
-    /// Causality associated with the cell
-    state: rt::Cell,
-    data: std::cell::UnsafeCell<T>,
-}
+#[repr(transparent)]
+pub struct UnsafeCell<T: ?Sized>(std::cell::UnsafeCell<T>);
 
 /// A checked immutable raw pointer to an [`UnsafeCell`].
 ///
@@ -105,21 +106,28 @@ impl<T> UnsafeCell<T> {
     /// Constructs a new instance of `UnsafeCell` which will wrap the specified value.
     #[track_caller]
     pub fn new(data: T) -> UnsafeCell<T> {
-        let state = rt::Cell::new(location!());
-
-        UnsafeCell {
-            state,
-            data: std::cell::UnsafeCell::new(data),
-        }
+        Self(std::cell::UnsafeCell::new(data))
     }
 
     /// Unwraps the value.
     pub fn into_inner(self) -> T {
-        self.data.into_inner()
+        self.0.into_inner()
     }
 }
 
 impl<T: ?Sized> UnsafeCell<T> {
+    fn with_state<U>(&self, f: impl FnOnce(&rt::Cell) -> U) -> U {
+        f(CELLS
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .get_or_insert_with(HashMap::new)
+            .entry((
+                &self.0 as *const _ as *const () as usize,
+                rt::execution(|e| e.id()),
+            ))
+            .or_insert_with(|| rt::Cell::new(rt::Location::disabled())))
+    }
+
     /// Get an immutable pointer to the wrapped value.
     ///
     /// # Panics
@@ -131,8 +139,9 @@ impl<T: ?Sized> UnsafeCell<T> {
     where
         F: FnOnce(*const T) -> R,
     {
-        let _reading = self.state.start_read(location!());
-        f(self.data.get() as *const T)
+        let location = location!();
+        let _reading = self.with_state(|s| s.start_read(location));
+        f(self.0.get() as *const T)
     }
 
     /// Get a mutable pointer to the wrapped value.
@@ -146,8 +155,9 @@ impl<T: ?Sized> UnsafeCell<T> {
     where
         F: FnOnce(*mut T) -> R,
     {
-        let _writing = self.state.start_write(location!());
-        f(self.data.get())
+        let location = location!();
+        let _writing = self.with_state(|s| s.start_write(location));
+        f(self.0.get())
     }
 
     /// Get an immutable pointer to the wrapped value.
@@ -168,9 +178,11 @@ impl<T: ?Sized> UnsafeCell<T> {
     /// [`get_mut`]: UnsafeCell::get_mut
     #[track_caller]
     pub fn get(&self) -> ConstPtr<T> {
+        let location = location!();
+        let _guard = self.with_state(|s| s.start_read(location));
         ConstPtr {
-            _guard: self.state.start_read(location!()),
-            ptr: self.data.get(),
+            _guard,
+            ptr: self.0.get(),
         }
     }
 
@@ -195,9 +207,11 @@ impl<T: ?Sized> UnsafeCell<T> {
     /// [`get_mut`]: UnsafeCell::get_mut
     #[track_caller]
     pub fn get_mut(&self) -> MutPtr<T> {
+        let location = location!();
+        let _guard = self.with_state(|s| s.start_write(location));
         MutPtr {
-            _guard: self.state.start_write(location!()),
-            ptr: self.data.get(),
+            _guard,
+            ptr: self.0.get(),
         }
     }
 }
