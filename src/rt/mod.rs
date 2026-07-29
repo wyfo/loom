@@ -263,6 +263,11 @@ where
     Scheduler::with_execution(f)
 }
 
+/// The id of the thread to attribute a trace line to, if it can be known.
+pub(crate) fn traced_thread() -> Option<usize> {
+    Scheduler::try_active_thread_id()
+}
+
 pub fn thread_done() {
     let locals = execution(|execution| {
         let thread = execution.threads.active_id();

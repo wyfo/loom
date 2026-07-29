@@ -98,55 +98,61 @@ macro_rules! atomic_int {
                 success: Ordering,
                 failure: Ordering,
             ) -> Result<$int_type, $int_type> {
-                self.compare_exchange(current, new, success, failure)
+                self.0.compare_exchange_named(
+                    "compare_exchange_weak",
+                    current,
+                    new,
+                    success,
+                    failure,
+                )
             }
 
             /// Adds to the current value, returning the previous value.
             #[track_caller]
             pub fn fetch_add(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| v.wrapping_add(val), order)
+                self.0.rmw("fetch_add", val, |v| v.wrapping_add(val), order)
             }
 
             /// Subtracts from the current value, returning the previous value.
             #[track_caller]
             pub fn fetch_sub(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| v.wrapping_sub(val), order)
+                self.0.rmw("fetch_sub", val, |v| v.wrapping_sub(val), order)
             }
 
             /// Bitwise "and" with the current value.
             #[track_caller]
             pub fn fetch_and(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| v & val, order)
+                self.0.rmw("fetch_and", val, |v| v & val, order)
             }
 
             /// Bitwise "nand" with the current value.
             #[track_caller]
             pub fn fetch_nand(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| !(v & val), order)
+                self.0.rmw("fetch_nand", val, |v| !(v & val), order)
             }
 
             /// Bitwise "or" with the current value.
             #[track_caller]
             pub fn fetch_or(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| v | val, order)
+                self.0.rmw("fetch_or", val, |v| v | val, order)
             }
 
             /// Bitwise "xor" with the current value.
             #[track_caller]
             pub fn fetch_xor(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| v ^ val, order)
+                self.0.rmw("fetch_xor", val, |v| v ^ val, order)
             }
 
             /// Stores the maximum of the current and provided value, returning the previous value
             #[track_caller]
             pub fn fetch_max(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| v.max(val), order)
+                self.0.rmw("fetch_max", val, |v| v.max(val), order)
             }
 
             /// Stores the minimum of the current and provided value, returning the previous value
             #[track_caller]
             pub fn fetch_min(&self, val: $int_type, order: Ordering) -> $int_type {
-                self.0.rmw(|v| v.min(val), order)
+                self.0.rmw("fetch_min", val, |v| v.min(val), order)
             }
 
             /// Fetches the value, and applies a function to it that returns an optional new value.

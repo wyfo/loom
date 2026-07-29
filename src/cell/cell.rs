@@ -26,7 +26,8 @@ impl<T> Cell<T> {
     /// Sets the contained value.
     #[track_caller]
     pub fn set(&self, val: T) {
-        let old = self.replace(val);
+        // Traced as `Cell::set`, and not as the `Cell::replace` it is implemented with.
+        let old = self.replace_named("Cell::set", val);
         drop(old);
     }
 
@@ -36,8 +37,9 @@ impl<T> Cell<T> {
         if core::ptr::eq(self, other) {
             return;
         }
-        self.cell.with_mut(|my_ptr| {
-            other.cell.with_mut(|their_ptr| unsafe {
+        // Both cells are accessed, so both are traced.
+        self.cell.with_mut_named("Cell::swap", |my_ptr| {
+            other.cell.with_mut_named("Cell::swap", |their_ptr| unsafe {
                 core::ptr::swap(my_ptr, their_ptr);
             })
         })
@@ -46,8 +48,14 @@ impl<T> Cell<T> {
     /// Replaces the contained value, and returns it.
     #[track_caller]
     pub fn replace(&self, val: T) -> T {
+        self.replace_named("Cell::replace", val)
+    }
+
+    /// `op` is only used for tracing, see `UnsafeCell::with_mut_named`.
+    #[track_caller]
+    fn replace_named(&self, op: &'static str, val: T) -> T {
         self.cell
-            .with_mut(|ptr| unsafe { core::mem::replace(&mut *ptr, val) })
+            .with_mut_named(op, |ptr| unsafe { core::mem::replace(&mut *ptr, val) })
     }
 
     /// Returns a copy of the contained value.
@@ -56,7 +64,7 @@ impl<T> Cell<T> {
     where
         T: Copy,
     {
-        self.cell.with(|ptr| unsafe { *ptr })
+        self.cell.with_named("Cell::get", |ptr| unsafe { *ptr })
     }
 
     /// Takes the value of the cell, leaving `Default::default()` in its place.
@@ -65,7 +73,7 @@ impl<T> Cell<T> {
     where
         T: Default,
     {
-        self.replace(T::default())
+        self.replace_named("Cell::take", T::default())
     }
 
     /// Unwraps the value, consuming the cell.

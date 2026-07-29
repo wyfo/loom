@@ -1,7 +1,7 @@
 /// Numeric-like type can be represented by a `u64`.
 ///
 /// Used by `Atomic` to store values.
-pub(crate) trait Numeric: Sized + Copy + PartialEq {
+pub(crate) trait Numeric: Sized + Copy + PartialEq + std::fmt::Debug {
     /// Convert a value into `u64` representation
     fn into_u64(self) -> u64;
 

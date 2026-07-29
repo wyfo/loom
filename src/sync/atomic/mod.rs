@@ -1,5 +1,7 @@
 //! Mock implementation of `std::sync::atomic`.
 
+use crate::downgrade::Slot;
+
 #[allow(clippy::module_inception)]
 mod atomic;
 use self::atomic::Atomic;
@@ -33,6 +35,19 @@ pub fn spin_loop_hint() {
 }
 
 /// An atomic fence.
+///
+/// A fence is downgradable like any atomic operation, see [`crate::downgrade`].
+#[track_caller]
 pub fn fence(order: Ordering) {
-    crate::rt::fence(order);
+    let location = std::panic::Location::caller();
+    let downgraded = crate::downgrade::apply(order, Slot::Single);
+    // There is no such thing as a relaxed fence, so a fence downgraded to `Relaxed` is
+    // removed. An ordering which was already `Relaxed` is not downgraded, and still panics
+    // in `rt::fence`.
+    if downgraded == Ordering::Relaxed && order != Ordering::Relaxed {
+        crate::trace::write_at(location, format_args!("fence({order:?}) [removed]"));
+        return;
+    }
+    crate::rt::fence(downgraded);
+    crate::trace::write_at(location, format_args!("fence({downgraded:?})"));
 }

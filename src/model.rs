@@ -190,6 +190,10 @@ impl Builder {
 
             let f = f.clone();
 
+            // Only the last iteration is kept in the trace, which is the failing one when
+            // the model panics.
+            crate::trace::new_iteration(i);
+
             scheduler.run(&mut execution, move || {
                 f();
 

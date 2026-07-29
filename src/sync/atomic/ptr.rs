@@ -92,7 +92,8 @@ impl<T> AtomicPtr<T> {
         success: Ordering,
         failure: Ordering,
     ) -> Result<*mut T, *mut T> {
-        self.compare_exchange(current, new, success, failure)
+        self.0
+            .compare_exchange_named("compare_exchange_weak", current, new, success, failure)
     }
 
     /// Fetches the value, and applies a function to it that returns an optional new value. Returns

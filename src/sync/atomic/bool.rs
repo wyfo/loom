@@ -82,31 +82,32 @@ impl AtomicBool {
         success: Ordering,
         failure: Ordering,
     ) -> Result<bool, bool> {
-        self.compare_exchange(current, new, success, failure)
+        self.0
+            .compare_exchange_named("compare_exchange_weak", current, new, success, failure)
     }
 
     /// Logical "and" with the current value.
     #[track_caller]
     pub fn fetch_and(&self, val: bool, order: Ordering) -> bool {
-        self.0.rmw(|v| v & val, order)
+        self.0.rmw("fetch_and", val, |v| v & val, order)
     }
 
     /// Logical "nand" with the current value.
     #[track_caller]
     pub fn fetch_nand(&self, val: bool, order: Ordering) -> bool {
-        self.0.rmw(|v| !(v & val), order)
+        self.0.rmw("fetch_nand", val, |v| !(v & val), order)
     }
 
     /// Logical "or" with the current value.
     #[track_caller]
     pub fn fetch_or(&self, val: bool, order: Ordering) -> bool {
-        self.0.rmw(|v| v | val, order)
+        self.0.rmw("fetch_or", val, |v| v | val, order)
     }
 
     /// Logical "xor" with the current value.
     #[track_caller]
     pub fn fetch_xor(&self, val: bool, order: Ordering) -> bool {
-        self.0.rmw(|v| v ^ val, order)
+        self.0.rmw("fetch_xor", val, |v| v ^ val, order)
     }
 
     /// Fetches the value, and applies a function to it that returns an optional new value. Returns

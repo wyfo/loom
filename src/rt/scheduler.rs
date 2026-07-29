@@ -43,6 +43,22 @@ impl Scheduler {
         Self::with_state(|state| f(state.execution))
     }
 
+    /// The id of the active thread, for [`crate::trace`].
+    ///
+    /// Unlike [`Self::with_execution`], it doesn't panic outside of a model, and returns
+    /// `None` instead — tracing must not be the reason a test fails. It also gives up if the
+    /// state is already borrowed, which happens when tracing an operation performed by loom
+    /// itself, from inside an `Execution` closure.
+    pub(crate) fn try_active_thread_id() -> Option<usize> {
+        if !STATE.is_set() {
+            return None;
+        }
+        STATE.with(|state| {
+            let state = state.try_borrow().ok()?;
+            Some(state.execution.threads.active_id().as_usize())
+        })
+    }
+
     /// Perform a context switch
     pub(crate) fn switch() {
         use std::future::Future;

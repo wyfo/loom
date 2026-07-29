@@ -1,4 +1,15 @@
 use crate::rt;
+use crate::trace;
+
+/// Writes a trace line for the access of the caller, see [`crate::trace`].
+///
+/// It must only be used in `#[track_caller]` functions, so the line is attributed to the
+/// access in the tested code.
+macro_rules! trace_access {
+    ($($t:tt)*) => {
+        trace::write_at(::std::panic::Location::caller(), format_args!($($t)*))
+    };
+}
 
 /// A checked version of `std::cell::UnsafeCell`.
 ///
@@ -131,7 +142,18 @@ impl<T: ?Sized> UnsafeCell<T> {
     where
         F: FnOnce(*const T) -> R,
     {
+        self.with_named("UnsafeCell::with", f)
+    }
+
+    /// `op` is only used for tracing, and is the name of the operation as called by the tested
+    /// code, e.g. `"Cell::get"`.
+    #[track_caller]
+    pub(crate) fn with_named<F, R>(&self, op: &'static str, f: F) -> R
+    where
+        F: FnOnce(*const T) -> R,
+    {
         let _reading = self.state.start_read(location!());
+        trace_access!("{op}()");
         f(self.data.get() as *const T)
     }
 
@@ -146,7 +168,18 @@ impl<T: ?Sized> UnsafeCell<T> {
     where
         F: FnOnce(*mut T) -> R,
     {
+        self.with_mut_named("UnsafeCell::with_mut", f)
+    }
+
+    /// `op` is only used for tracing, and is the name of the operation as called by the tested
+    /// code, e.g. `"Cell::set"`.
+    #[track_caller]
+    pub(crate) fn with_mut_named<F, R>(&self, op: &'static str, f: F) -> R
+    where
+        F: FnOnce(*mut T) -> R,
+    {
         let _writing = self.state.start_write(location!());
+        trace_access!("{op}()");
         f(self.data.get())
     }
 
@@ -168,8 +201,11 @@ impl<T: ?Sized> UnsafeCell<T> {
     /// [`get_mut`]: UnsafeCell::get_mut
     #[track_caller]
     pub fn get(&self) -> ConstPtr<T> {
+        let guard = self.state.start_read(location!());
+        // The access lasts as long as the guard, which is not traced: only its start is.
+        trace_access!("UnsafeCell::get()");
         ConstPtr {
-            _guard: self.state.start_read(location!()),
+            _guard: guard,
             ptr: self.data.get(),
         }
     }
@@ -195,8 +231,11 @@ impl<T: ?Sized> UnsafeCell<T> {
     /// [`get_mut`]: UnsafeCell::get_mut
     #[track_caller]
     pub fn get_mut(&self) -> MutPtr<T> {
+        let guard = self.state.start_write(location!());
+        // The access lasts as long as the guard, which is not traced: only its start is.
+        trace_access!("UnsafeCell::get_mut()");
         MutPtr {
-            _guard: self.state.start_write(location!()),
+            _guard: guard,
             ptr: self.data.get(),
         }
     }
